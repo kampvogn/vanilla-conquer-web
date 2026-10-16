@@ -1,0 +1,103 @@
+{
+ "REDALERT.MIX": {
+  "size": 25046328,
+  "sha1": "0e58f4b54f44f6cd29fecf8cf379d33cf2d4caef",
+  "segments": [
+   {
+    "src": "cd1",
+    "offset": 24561664,
+    "length": 25046328
+   }
+  ]
+ },
+ "SCORES.MIX": {
+  "size": 64171360,
+  "sha1": "fef2a16305262515b02ea462a58e87dc98598162",
+  "segments": [
+   {
+    "src": "cd1",
+    "offset": 477268737,
+    "length": 64171360
+   }
+  ]
+ },
+ "MOVIES1.MIX": {
+  "size": 369362336,
+  "sha1": "4656e5592600c2fd9af8a8bf5e7e08f9937fcdd7",
+  "segments": [
+   {
+    "src": "cd1",
+    "offset": 107906401,
+    "length": 369362336
+   }
+  ]
+ },
+ "MOVIES2.MIX": {
+  "size": 415334456,
+  "sha1": "46a468a6304a10a324aa448cf73013ca9592ef92",
+  "segments": [
+   {
+    "src": "cd2",
+    "offset": 105153889,
+    "length": 415334456
+   }
+  ]
+ },
+ "MAIN.MIX": {
+  "size": 21008899,
+  "sha1": "cd6eb788af147541dd5cea703b6adb8fac30f626",
+  "segments": [
+   {
+    "inline": "CACdkUABBBE2op64BAAXOCEAKCFCqq6QDQFdDwQA2C+OvwAAAACeuAQAHjyy09haIQG6XA8A1OnnBgugEQHNug8A9xg5Ei3KCQGBxgMACQcBQpK3MAEL2g8ADuEpcrXwJQB42eMA"
+   },
+   {
+    "src": "cd1",
+    "offset": 543743813,
+    "length": 309406,
+    "name": "allies.mix"
+   },
+   {
+    "src": "cd1",
+    "offset": 90487020,
+    "length": 2177047,
+    "name": "conquer.mix"
+   },
+   {
+    "src": "cd1",
+    "offset": 92726632,
+    "length": 14932344,
+    "name": "general.mix"
+   },
+   {
+    "src": "cd1",
+    "offset": 107658976,
+    "length": 247425,
+    "name": "interior.mix"
+   },
+   {
+    "src": "cd1",
+    "offset": 543477736,
+    "length": 266077,
+    "name": "russian.mix"
+   },
+   {
+    "src": "cd1",
+    "offset": 541440097,
+    "length": 1030861,
+    "name": "snow.mix"
+   },
+   {
+    "src": "cd1",
+    "offset": 542470958,
+    "length": 1006778,
+    "name": "sounds.mix"
+   },
+   {
+    "src": "cd1",
+    "offset": 544053219,
+    "length": 1038859,
+    "name": "temperat.mix"
+   }
+  ]
+ }
+}

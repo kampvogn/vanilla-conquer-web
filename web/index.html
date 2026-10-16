@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Red Alert</title>
+<style>
+	:root { color-scheme: dark; }
+	html, body { margin: 0; height: 100%; background: #000; color: #b9a; overflow: hidden; }
+	body { font: 14px/1.5 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace; }
+	canvas { display: block; position: fixed; image-rendering: pixelated; cursor: none; outline: none; touch-action: none; -webkit-user-select: none; user-select: none; }
+	.overlay {
+		position: fixed; inset: 0; display: flex; flex-direction: column;
+		align-items: center; justify-content: center; gap: 1.1em; text-align: center; padding: 16px;
+	}
+	.overlay[hidden] { display: none; }
+	#start { background: #000; }
+	#start .tap, #invite { background: none; font: inherit; cursor: pointer; }
+	#invite { border: 1px solid #733; color: #fcc; padding: .2em .8em; margin-left: .5em; }
+	#start .mp { display: flex; flex-direction: column; align-items: center; gap: .5em; border-top: 1px solid #311; padding-top: 1em; }
+	#name { background: #100; color: #fee; border: 1px solid #733; font: inherit; padding: .2em .4em; width: 9em; }
+	#start h1 { margin: 0; font-size: clamp(28px, 7vw, 56px); letter-spacing: .12em; color: #e33; font-weight: 700; }
+	#start .tap { border: 1px solid #733; padding: .6em 1.6em; color: #fcc; }
+	#start .small { max-width: 38em; font-size: 12px; color: #866; }
+	#start label { color: #caa; cursor: pointer; }
+	#start b { color: #fcc; font-weight: normal; }
+	#status { pointer-events: none; color: #caa; }
+	#bar { width: min(420px, 80vw); height: 6px; border: 1px solid #733; }
+	#bar > div { height: 100%; width: 0; background: #e33; }
+	#fs {
+		position: fixed; top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right));
+		background: rgba(0, 0, 0, .55); color: #caa; border: 1px solid #644; border-radius: 4px;
+		font: 12px/1 ui-monospace, Menlo, Consolas, monospace; padding: 8px 10px; cursor: pointer;
+		transition: opacity .6s; z-index: 2;
+	}
+	#fs[hidden] { display: none; }
+	#fs.idle { opacity: 0; }
+	#fs:hover, #fs:focus-visible { opacity: 1; color: #fee; }
+	a { color: #caa; }
+</style>
+</head>
+<body>
+<canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+
+<div id="start" class="overlay">
+	<h1>RED ALERT</h1>
+	<button id="go" class="tap" type="button">▶ Click to start</button>
+	<label><input type="checkbox" id="music" checked> Music (+64 MB)</label>
+	<label><input type="checkbox" id="movies"> Movies (+<span id="moviesize"></span>, desktop only)</label>
+	<span class="small" id="size"></span>
+	<div class="mp">
+		<label>Your name <input id="name" maxlength="11" spellcheck="false" autocomplete="off"></label>
+		<span>Room: <b id="room"></b> <button id="invite" type="button">Invite friends</button></span>
+		<span class="small" id="invitemsg">Multiplayer: start, choose Multiplayer Game → Network. One player clicks New,
+		the others pick that game and Join. Everyone with the same invite link is in the same room.</span>
+	</div>
+	<span class="small">
+		Command &amp; Conquer: Red Alert (Westwood, 1996) running in the browser — built from EA's GPL source
+		via <a href="https://github.com/TheAssemblyArmada/Vanilla-Conquer" target="_blank" rel="noopener">Vanilla Conquer</a>
+		and Emscripten (<a href="https://github.com/kampvogn/vanilla-conquer-web" target="_blank" rel="noopener">source</a>). Game data from EA's 2008 freeware release.
+		Best with mouse and keyboard; on touch screens: tap = click, drag = select, hold = right click,
+		two fingers = scroll the map. Saved games stay in this browser.
+	</span>
+</div>
+<div id="status" class="overlay" hidden><span id="msg"></span><div id="bar"><div></div></div></div>
+<button id="fs" type="button" hidden>⛶ Fullscreen</button>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const DATA_VERSION = 1;
+const FILES = [
+	{ name: 'MAIN.MIX', size: 21008899 },
+	{ name: 'REDALERT.MIX', size: 25046328 },
+	{ name: 'SCORES.MIX', size: 64171360, music: true },
+	{ name: 'MOVIES1.MIX', size: 369362336, movies: true }, // Allied campaign
+	{ name: 'MOVIES2.MIX', size: 415334456, movies: true }, // Soviet campaign
+];
+const wanted = (f) => (!f.music || $('music').checked) && (!f.movies || $('movies').checked);
+const MB = (n) => (n / 1048576).toFixed(0) + ' MB';
+
+// Remember the music and movie choices
+try {
+	$('music').checked = localStorage.getItem('ra-music') !== 'no';
+	$('movies').checked = localStorage.getItem('ra-movies') === 'yes';
+} catch {}
+$('moviesize').textContent = MB(FILES.filter((f) => f.movies).reduce((a, f) => a + f.size, 0));
+const updateSize = () => {
+	const total = FILES.filter(wanted).reduce((a, f) => a + f.size, 0);
+	$('size').textContent = 'First start downloads ' + MB(total) + '; after that it is stored in the browser.';
+};
+for (const id of ['music', 'movies']) {
+	$(id).addEventListener('change', () => { try { localStorage.setItem('ra-' + id, $(id).checked ? 'yes' : 'no'); } catch {} updateSize(); });
+}
+updateSize();
+
+// Multiplayer name (the game's [MultiPlayer] Handle) and room (#room=…)
+const roomOf = () => ((location.hash.match(/room=([a-z0-9-]{1,32})/i) || [])[1] || 'lobby').toLowerCase();
+const cleanName = (v) => v.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 11);
+try { $('name').value = cleanName(localStorage.getItem('ra-name') || ''); } catch {}
+if (!$('name').value) $('name').value = 'Player' + Math.floor(100 + Math.random() * 900);
+$('name').addEventListener('input', () => { $('name').value = cleanName($('name').value); try { localStorage.setItem('ra-name', $('name').value); } catch {} });
+$('room').textContent = roomOf();
+$('invite').addEventListener('click', async () => {
+	if (roomOf() === 'lobby') location.hash = 'room=' + Math.random().toString(36).slice(2, 8);
+	$('room').textContent = roomOf();
+	const link = location.origin + location.pathname + '#room=' + roomOf();
+	let copied = false;
+	try { await navigator.clipboard.writeText(link); copied = true; } catch {}
+	$('invitemsg').textContent = (copied ? 'Link copied: ' : 'Share this link: ') + link;
+});
+
+// Data files are kept in Cache Storage; a new DATA_VERSION drops the old ones
+async function fetchData(file, onProgress) {
+	const url = 'data/' + file.name + '?v=' + DATA_VERSION;
+	let cache = null;
+	try {
+		cache = await caches.open('redalert-data');
+		const hit = await cache.match(url);
+		if (hit) { onProgress(file.size); return new Uint8Array(await hit.arrayBuffer()); }
+	} catch { cache = null; }
+	const res = await fetch(url);
+	if (!res.ok) throw new Error('Could not fetch ' + file.name);
+	const reader = res.body.getReader();
+	const buf = new Uint8Array(file.size);
+	let at = 0;
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		if (at + value.length > buf.length) throw new Error('Unexpected size of ' + file.name);
+		buf.set(value, at); at += value.length; onProgress(at);
+	}
+	if (at !== file.size) throw new Error('Incomplete download of ' + file.name);
+	if (cache) {
+		try {
+			for (const k of await cache.keys()) if (k.url.includes('/data/' + file.name) && !k.url.endsWith('v=' + DATA_VERSION)) await cache.delete(k);
+			await cache.put(url, new Response(buf));
+		} catch { /* storage full or unavailable: just play without caching */ }
+	}
+	return buf;
+}
+
+// Network games: a WebSocket to the relay (virtual LAN per room). The game's
+// WebInterfaceClass reads Module.net: id (from the relay's hello) and the
+// inbox of received packets; it sends through net.ws itself.
+function connectNet() {
+	const q = new URLSearchParams(location.search);
+	const room = roomOf();
+	const url = q.get('net') || (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/redalert/net';
+	const net = Module.net = { ws: null, id: 0, inbox: [], room };
+	let delay = 3000;
+	const open = () => {
+		const ws = new WebSocket(url + '?room=' + encodeURIComponent(room));
+		ws.binaryType = 'arraybuffer';
+		const send = ws.send.bind(ws);
+		ws.send = (d) => { net.sent = (net.sent || 0) + 1; send(d); };
+		net.ws = ws;
+		ws.onmessage = (e) => {
+			if (typeof e.data === 'string') {
+				const m = JSON.parse(e.data);
+				if (m.type === 'hello') net.id = m.id;
+				return;
+			}
+			net.received = (net.received || 0) + 1;
+			const d = new Uint8Array(e.data);
+			if (d.length > 4 && net.inbox.length < 4000) net.inbox.push({ src: new DataView(e.data).getUint32(0), data: d.subarray(4) });
+		};
+		ws.onopen = () => { delay = 3000; };
+		ws.onclose = () => { net.id = 0; setTimeout(open, delay); delay = Math.min(30000, delay * 2); };
+	};
+	open();
+}
+
+async function audioWorks() {
+	try {
+		const ac = new AudioContext();
+		await Promise.race([ac.resume(), new Promise((r) => setTimeout(r, 500))]);
+		const ok = ac.state === 'running';
+		ac.close();
+		return ok;
+	} catch { return false; }
+}
+
+// Set the keys the web build needs, keeping everything else the game wrote
+function writeIni(path, wanted) {
+	let text = '';
+	try { text = FS.readFile(path, { encoding: 'utf8' }); } catch {}
+	const lines = text.split(/\r?\n/);
+	for (const [sec, keys] of Object.entries(wanted)) {
+		let start = lines.findIndex((l) => l.trim().toLowerCase() === '[' + sec.toLowerCase() + ']');
+		if (start < 0) { lines.push('', '[' + sec + ']'); start = lines.length - 1; }
+		for (const [k, v] of Object.entries(keys)) {
+			let end = start + 1;
+			while (end < lines.length && !lines[end].trim().startsWith('[')) end++;
+			const at = lines.slice(start + 1, end).findIndex((l) => l.split('=')[0].trim().toLowerCase() === k.toLowerCase());
+			if (at >= 0) lines[start + 1 + at] = k + '=' + v;
+			else lines.splice(end, 0, k + '=' + v);
+		}
+	}
+	FS.writeFile(path, lines.join('\n').replace(/^\n+/, '') + '\n');
+}
+
+// Touch: the page turns gestures into mouse input for the game (SDL never
+// sees the touches). The press is held back until the gesture is known:
+//   tap = left click, drag = selection box, hold 0.5 s = right click,
+//   two fingers = pan the map (Web_Scroll, in 640x400 game pixels).
+function touchControls(canvas) {
+	let mode = null, start = null, last = null, holdTimer = 0;
+	const mouse = (type, x, y, button = 0) => canvas.dispatchEvent(new MouseEvent(type, {
+		clientX: x, clientY: y, button, buttons: type === 'mouseup' ? 0 : 1 << (button === 2 ? 1 : 0), bubbles: true, cancelable: true,
+	}));
+	const click = (x, y, button) => { mouse('mousemove', x, y); mouse('mousedown', x, y, button); setTimeout(() => mouse('mouseup', x, y, button), 70); };
+	const centre = (t) => { let x = 0, y = 0; for (const p of t) { x += p.clientX; y += p.clientY; } return [x / t.length, y / t.length]; };
+	const stop = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+	canvas.addEventListener('touchstart', (e) => {
+		stop(e);
+		const t = e.touches;
+		if (t.length === 1 && !mode) {
+			mode = 'pending';
+			start = last = [t[0].clientX, t[0].clientY];
+			holdTimer = setTimeout(() => { if (mode === 'pending') { mode = 'done'; click(...start, 2); } }, 500);
+		} else if (t.length >= 2) {
+			if (mode === 'drag') mouse('mouseup', ...last);
+			clearTimeout(holdTimer);
+			mode = 'pan';
+			last = centre(t);
+		}
+	}, { capture: true, passive: false });
+	canvas.addEventListener('touchmove', (e) => {
+		stop(e);
+		const t = e.touches;
+		if (mode === 'pan' && t.length >= 2) {
+			const c = centre(t), r = canvas.getBoundingClientRect();
+			if (Module._Web_Scroll) Module._Web_Scroll(Math.round((last[0] - c[0]) * 640 / r.width), Math.round((last[1] - c[1]) * 400 / r.height));
+			last = c;
+		} else if (t.length === 1) {
+			const p = [t[0].clientX, t[0].clientY];
+			if (mode === 'pending' && Math.hypot(p[0] - start[0], p[1] - start[1]) > 10) {
+				clearTimeout(holdTimer);
+				mode = 'drag';
+				mouse('mousemove', ...start);
+				mouse('mousedown', ...start);
+			}
+			if (mode === 'drag') mouse('mousemove', ...p);
+			last = p;
+		}
+	}, { capture: true, passive: false });
+	const end = (e) => {
+		stop(e);
+		if (e.touches.length > 0) return;
+		clearTimeout(holdTimer);
+		if (mode === 'pending') click(...start, 0);
+		else if (mode === 'drag') mouse('mouseup', ...last);
+		mode = null;
+	};
+	canvas.addEventListener('touchend', end, { capture: true, passive: false });
+	canvas.addEventListener('touchcancel', end, { capture: true, passive: false });
+}
+
+// Largest 4:3 box that fits the window, centred
+function fit() {
+	const c = $('canvas'), ar = (c.width || 4) / (c.height || 3);
+	const w = Math.min(innerWidth, innerHeight * ar), h = w / ar;
+	Object.assign(c.style, { width: w + 'px', height: h + 'px', left: (innerWidth - w) / 2 + 'px', top: (innerHeight - h) / 2 + 'px' });
+}
+
+// Fullscreen button: fades out when the pointer rests, back on movement
+function fullscreenButton() {
+	const btn = $('fs'), el = document.documentElement;
+	if (!(document.fullscreenEnabled || document.webkitFullscreenEnabled)) return;
+	const on = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+	const sync = () => { btn.textContent = on() ? '✕ Exit fullscreen' : '⛶ Fullscreen'; };
+	let timer = 0;
+	const wake = () => { btn.classList.remove('idle'); clearTimeout(timer); timer = setTimeout(() => btn.classList.add('idle'), 2500); };
+	btn.addEventListener('click', (e) => {
+		e.stopPropagation();
+		if (on()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+		else (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+		$('canvas').focus();
+	});
+	document.addEventListener('fullscreenchange', sync);
+	document.addEventListener('webkitfullscreenchange', sync);
+	addEventListener('pointermove', wake);
+	sync(); btn.hidden = false; wake();
+}
+
+async function start() {
+	$('start').hidden = true;
+	$('status').hidden = false;
+	const files = FILES.filter(wanted);
+	const total = files.reduce((a, f) => a + f.size, 0);
+	const noSound = location.search.includes('nosound') || !(await audioWorks());
+
+	// Load the game code while the data downloads
+	const runtime = new Promise((resolve) => {
+		window.Module = {
+			canvas: $('canvas'),
+			noSound,
+			print: (t) => console.log(t),
+			printErr: (t) => console.warn(t),
+			onRuntimeInitialized: resolve,
+		};
+		const s = document.createElement('script');
+		s.src = 'vanillara.js?v=3';
+		document.body.appendChild(s);
+	});
+	connectNet();
+
+	const done = new Array(files.length).fill(0);
+	const progress = () => {
+		const got = done.reduce((a, b) => a + b, 0);
+		$('msg').textContent = 'Loading game data… ' + MB(got) + ' / ' + MB(total);
+		$('bar').firstElementChild.style.width = (100 * got / total).toFixed(1) + '%';
+	};
+	progress();
+	const data = await Promise.all(files.map((f, i) => fetchData(f, (n) => { done[i] = n; progress(); })));
+	$('msg').textContent = 'Starting…';
+	await runtime;
+
+	FS.mkdir('/game');
+	// Hand the buffers to the file system without copying (the movies are big)
+	files.forEach((f, i) => {
+		const st = FS.open('/game/' + f.name, 'w');
+		FS.write(st, data[i], 0, data[i].length, 0, true);
+		FS.close(st);
+	});
+	// Settings and saved games live in IndexedDB (IDBFS), synced every few
+	// seconds and when the page is hidden
+	const user = '/home/web_user/.config/vanilla-conquer';
+	FS.mkdirTree(user);
+	FS.mount(IDBFS, {}, user);
+	await new Promise((r) => FS.syncfs(true, r));
+	FS.mkdirTree(user + '/vanillara');
+	writeIni(user + '/vanillara/redalert.ini', {
+		Intro: { PlayIntro: 'no' },
+		// Windowed + no raw input + no boxing = absolute mouse position, no pointer lock
+		Video: { Windowed: 'yes', WindowWidth: '1280', WindowHeight: '960', Boxing: 'no' },
+		Mouse: { RawInput: 'no' },
+		MultiPlayer: { Handle: cleanName($('name').value) || 'Player' },
+	});
+	let syncing = false;
+	const save = () => { if (syncing) return; syncing = true; FS.syncfs(false, () => { syncing = false; }); };
+	setInterval(save, 5000);
+	addEventListener('pagehide', save);
+	document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+
+	FS.chdir('/game');
+	$('status').hidden = true;
+	addEventListener('resize', fit);
+	new ResizeObserver(fit).observe($('canvas'));
+	setInterval(fit, 1000);
+	fit();
+	fullscreenButton();
+	touchControls($('canvas'));
+	$('canvas').focus();
+	window.__started = true;
+	Module.callMain([]);
+}
+
+$('go').addEventListener('click', () => {
+	start().catch((e) => {
+		console.error(e);
+		$('status').hidden = false;
+		$('msg').textContent = 'Error: ' + e.message;
+	});
+});
+</script>
+</body>
+</html>

@@ -2,3 +2,14 @@
 /CMakeUserPresets.json
 /.cache
 /.vscode
+
+# web/ (see web/README.md): built and downloaded files, never game data
+wasm-stub/
+web/stage/
+web/shots/
+web/test/node_modules/
+web/test/package*.json
+*.MIX
+*.mix
+*.iso
+*.bin
