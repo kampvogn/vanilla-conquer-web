@@ -66,6 +66,7 @@
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 #include "function.h"
+#include "mssleep.h"
 #include "msgbox.h"
 #include "keyframe.h"
 #include "language.h"
@@ -444,6 +445,48 @@ void Main_Game(int argc, char* argv[])
  *   01/21/1992 JLB : Created.                                                                 *
  *   07/04/1995 JLB : Handles team and map control hotkeys.                                    *
  *=============================================================================================*/
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+/*
+**	Touch panning from the web page: pixels (640x400 game space) are queued
+**	here and applied from the game's own input processing.
+*/
+static int WebScrollX = 0;
+static int WebScrollY = 0;
+
+extern "C" EMSCRIPTEN_KEEPALIVE void Web_Scroll(int dx, int dy)
+{
+    WebScrollX += dx;
+    WebScrollY += dy;
+}
+
+// For tests: the game frame (network games advance it in lockstep)
+extern "C" EMSCRIPTEN_KEEPALIVE int Web_Frame()
+{
+    return Frame;
+}
+
+static void Web_Apply_Scroll()
+{
+    int lx = WebScrollX * CELL_LEPTON_W / CELL_PIXEL_W;
+    int ly = WebScrollY * CELL_LEPTON_W / CELL_PIXEL_W;
+    WebScrollX -= lx * CELL_PIXEL_W / CELL_LEPTON_W;
+    WebScrollY -= ly * CELL_PIXEL_W / CELL_LEPTON_W;
+    if (lx > 0) {
+        Map.Scroll_Map(DIR_E, lx, true);
+    } else if (lx < 0) {
+        lx = -lx;
+        Map.Scroll_Map(DIR_W, lx, true);
+    }
+    if (ly > 0) {
+        Map.Scroll_Map(DIR_S, ly, true);
+    } else if (ly < 0) {
+        ly = -ly;
+        Map.Scroll_Map(DIR_N, ly, true);
+    }
+}
+#endif
+
 void Keyboard_Process(KeyNumType& input)
 {
     ObjectClass* obj;
@@ -1356,6 +1399,7 @@ void Color_Cycle(void)
  *=============================================================================================*/
 void Call_Back(void)
 {
+    Web_Yield(); // waiting loops call this; let the browser (audio, input) run
     /*
     **	Music and speech maintenance
     */
@@ -1798,6 +1842,9 @@ bool Main_Loop()
         if (SpecialDialog == SDLG_NONE && GameInFocus) {
             WWMouse->Erase_Mouse(&HidPage, true);
             Map.Input(input, x, y);
+#ifdef __EMSCRIPTEN__
+            Web_Apply_Scroll(); // every frame, not only when there is input
+#endif
             if (input) {
                 Keyboard_Process(input);
             }
@@ -2443,7 +2490,7 @@ void Play_Movie(char const* name, ThemeType theme, bool clrscrn, bool immediate)
         }
 #endif
 
-        if (!Debug_Quiet && Get_Digi_Handle() != -1) {
+        if (!Debug_Quiet && SoundOn && Get_Digi_Handle() != -1) { // no audio: time movies by the clock
             AnimControl.OptionFlags |= VQAOPTF_AUDIO;
         } else {
             AnimControl.OptionFlags &= ~VQAOPTF_AUDIO;
@@ -4086,7 +4133,7 @@ bool Force_CD_Available(int cd)
 #endif
 
 #ifdef FRENCH
-                sprintf(buffer, "Ins�rez le %s", _cd_name[cd]);
+                sprintf(buffer, "InsÃÂÃÂrez le %s", _cd_name[cd]);
 #else
 #ifdef GERMAN
                 sprintf(buffer, "Bitte %s", _cd_name[cd]);
@@ -4097,7 +4144,7 @@ bool Force_CD_Available(int cd)
             } else {
 #ifdef DVD
 #ifdef FRENCH
-                sprintf(buffer, "Ins�rez le %s", _cd_name[4]);
+                sprintf(buffer, "InsÃÂÃÂrez le %s", _cd_name[4]);
 #else
 #ifdef GERMAN
                 sprintf(buffer, "Bitte %s", _cd_name[4]);

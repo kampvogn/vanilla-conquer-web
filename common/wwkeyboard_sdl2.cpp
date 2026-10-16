@@ -20,6 +20,7 @@
 #include "settings.h"
 #include <cmath>
 #include <SDL.h>
+#include "mssleep.h"
 
 void Focus_Loss();
 void Focus_Restore();
@@ -36,11 +37,14 @@ void WWKeyboardClassSDL2::Fill_Buffer_From_System(void)
 #endif
     SDL_Event event;
 
+    Web_Yield();
     while (!Is_Buffer_Full() && SDL_PollEvent(&event)) {
         unsigned short key;
         switch (event.type) {
         case SDL_QUIT:
+#ifndef __EMSCRIPTEN__ // closing the tab is the only way out in a browser
             exit(0);
+#endif
             break;
         case SDL_KEYDOWN:
             Put_Key_Message(event.key.keysym.scancode, false);

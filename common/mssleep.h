@@ -6,6 +6,10 @@
 #ifndef MSSLEEP_H
 #define MSSLEEP_H
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
 #include <winbase.h>
 #elif defined(_WIN32)
@@ -25,7 +29,9 @@
  */
 static inline void us_sleep(unsigned us)
 {
-#ifdef _WIN32
+#if defined(__EMSCRIPTEN__)
+    emscripten_sleep((us + 999) / 1000);
+#elif defined(_WIN32)
     Sleep((us + 999) / 1000);
 #else
     struct timespec ts;
@@ -40,7 +46,9 @@ static inline void us_sleep(unsigned us)
  */
 static inline void ms_sleep(unsigned ms)
 {
-#ifdef _WIN32
+#if defined(__EMSCRIPTEN__)
+    emscripten_sleep(ms);
+#elif defined(_WIN32)
     Sleep(ms);
 #else
     struct timespec ts;
@@ -49,5 +57,26 @@ static inline void ms_sleep(unsigned ms)
     nanosleep(&ts, NULL);
 #endif
 }
+
+#ifdef __EMSCRIPTEN__
+/**
+ * Give the browser a turn (rendering, input, audio) if the game has not slept
+ * for a while. Called from places that busy loops keep calling (input pump,
+ * tick count), so loops written for DOS/Windows do not freeze the page.
+ */
+static inline void Web_Yield()
+{
+    static double last = 0;
+    double now = emscripten_get_now();
+    if (now - last >= 15) {
+        emscripten_sleep(0);
+        last = emscripten_get_now();
+    }
+}
+#else
+static inline void Web_Yield()
+{
+}
+#endif
 
 #endif /* MSSLEEP_H */

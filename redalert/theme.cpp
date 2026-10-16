@@ -234,6 +234,24 @@ ThemeType ThemeClass::Next_Song(ThemeType theme) const
 {
     if (theme == THEME_NONE || theme == THEME_PICK_ANOTHER
         || (theme != THEME_QUIET && !_themes[theme].Repeat && !Options.IsScoreRepeat)) {
+        /*
+        **	Without any music files (e.g. no SCORES.MIX) the loops below would
+        **	never find an allowed song.
+        */
+        int allowed = 0;
+        ThemeType only = THEME_NONE;
+        for (int t = THEME_FIRST; t <= THEME_LAST; t++) {
+            if (Is_Allowed(ThemeType(t))) {
+                allowed++;
+                only = ThemeType(t);
+            }
+        }
+        if (allowed == 0) {
+            return (THEME_NONE);
+        }
+        if (allowed == 1) {
+            return (only);
+        }
         if (Options.IsScoreShuffle) {
 
             /*

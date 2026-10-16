@@ -34,6 +34,10 @@
  *   main -- Initial startup routine (preps library systems).                                  *
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+EM_JS(int, Web_No_Sound, (), { return Module.noSound ? 1 : 0; });
+#endif
 #include "function.h"
 #include "language.h"
 #include "settings.h"
@@ -342,7 +346,13 @@ int main(int argc, char* argv[])
         ** are not using WinMain anymore, we simply pass 0 to it. */
         Create_Main_Window(ProgramInstance, 0, ScreenWidth, ScreenHeight);
 #endif
+#ifdef __EMSCRIPTEN__
+        // The page sets Module.noSound when the browser cannot play audio; movies are timed
+        // by the audio clock and would otherwise never advance.
+        SoundOn = Web_No_Sound() ? false : Audio_Init(16, false, 11025 * 2, false);
+#else
         SoundOn = Audio_Init(16, false, 11025 * 2, false);
+#endif
 
         bool video_success = false;
 

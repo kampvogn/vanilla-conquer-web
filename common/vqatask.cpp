@@ -16,6 +16,7 @@
 #include "vqafile.h"
 #include "vqaloader.h"
 #include <string.h>
+#include "mssleep.h"
 
 bool VQAMovieDone = false;
 
@@ -112,6 +113,7 @@ VQAErrorType VQA_Play(VQAHandle* handle, VQAPlayMode mode)
         }
 
         while (mode != 1) {
+            Web_Yield(); // the movie is timed by the audio; let the browser run it
             if (data->Flags & (VQA_DATA_FLAG_VIDEO_MEMORY_SET | VQA_DATA_FLAG_8)) {
                 break;
             }

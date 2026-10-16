@@ -41,6 +41,7 @@
 #include "timer.h"
 
 #include <chrono>
+#include "mssleep.h"
 
 using namespace std::chrono;
 
@@ -268,6 +269,7 @@ void WinTimerClass::Init(unsigned int freq)
 
 unsigned int WinTimerClass::Get_System_Tick_Count()
 {
+    Web_Yield();
     if (Frequency == 0) {
         return 0;
     }

@@ -260,6 +260,7 @@ inline static void _splitpath(const char* path, char* drive, char* dir, char* fn
     }
 }
 
+#ifndef __EMSCRIPTEN__ // Emscripten's libc has strupr
 inline static char* strupr(char* str)
 {
     char* ret = str;
@@ -269,6 +270,7 @@ inline static char* strupr(char* str)
     }
     return ret;
 }
+#endif
 
 inline static void strrev(char* str)
 {
