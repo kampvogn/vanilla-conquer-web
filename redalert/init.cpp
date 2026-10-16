@@ -64,6 +64,7 @@
 #ifdef NETWORKING
 #include "wsproto.h"
 #include "wspudp.h"
+#include "wspweb.h"
 #include "internet.h"
 #endif
 
@@ -900,7 +901,11 @@ bool Select_Game(bool fade)
                     if (PacketTransport)
                         delete PacketTransport;
 #ifdef NETWORKING
+#ifdef __EMSCRIPTEN__
+                    PacketTransport = new WebInterfaceClass; // WebSocket relay via the page
+#else
                     PacketTransport = new UDPInterfaceClass;
+#endif
 #endif
                     assert(PacketTransport != NULL);
                     if (PacketTransport->Init()) {
@@ -951,7 +956,11 @@ bool Select_Game(bool fade)
                     if (PacketTransport)
                         delete PacketTransport;
 
+#ifdef __EMSCRIPTEN__
+                    PacketTransport = new WebInterfaceClass; // WebSocket relay via the page
+#else
                     PacketTransport = new UDPInterfaceClass;
+#endif
                     assert(PacketTransport != NULL);
 
                     WWDebugString("RA95 - About to call Init_Network.\n");
