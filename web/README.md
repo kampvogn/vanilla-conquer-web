@@ -2,7 +2,7 @@
 
 This branch (`browser`) of [Vanilla Conquer](https://github.com/TheAssemblyArmada/Vanilla-Conquer)
 builds Red Alert to WebAssembly with Emscripten, with network play in the browser. It runs at
-<https://kampvogn.dk/redalert/>.
+<https://kampvogn.dk/games/redalert/>.
 
 ## Changes to Vanilla Conquer
 
