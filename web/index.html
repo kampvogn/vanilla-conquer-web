@@ -171,17 +171,28 @@ function connectNet() {
 	open();
 }
 
-// The audio context is created here, in the tap on Start, and handed to SDL
-// (Module.SDL2): Safari starts sound only from a user gesture, and SDL would
-// create its own later. A playback audio session keeps the iPhone's silent
-// switch from muting it (iOS 17+).
+// The audio context is created here, in the tap on Start, and handed to the
+// game's OpenAL: Safari starts sound only from a user gesture, and OpenAL
+// would create its own later, while the game starts. A playback audio session
+// keeps the iPhone's silent switch from muting it (iOS 17+).
 let audioCtx = null;
 async function audioWorks() {
 	try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
 	try {
 		const ac = new (window.AudioContext || window.webkitAudioContext)();
 		await Promise.race([ac.resume(), new Promise((r) => setTimeout(r, 500))]);
-		if (ac.state === 'running') { audioCtx = ac; return true; }
+		if (ac.state === 'running') {
+			audioCtx = ac;
+			// The game's sound is Emscripten's OpenAL, which makes its own
+			// AudioContext while the game starts, after the tap: give it this one.
+			const Real = window.AudioContext || window.webkitAudioContext;
+			window.AudioContext = window.webkitAudioContext = function (o) {
+				if (audioCtx && !(o && o.sampleRate && o.sampleRate !== audioCtx.sampleRate)) { const c = audioCtx; audioCtx = null; return c; }
+				return new Real(o);
+			};
+			window.AudioContext.prototype = Real.prototype;
+			return true;
+		}
 		ac.close();
 		return false;
 	} catch { return false; }
@@ -302,7 +313,6 @@ async function start() {
 		window.Module = {
 			canvas: $('canvas'),
 			noSound,
-			SDL2: audioCtx ? { audioContext: audioCtx } : undefined,
 			print: (t) => console.log(t),
 			printErr: (t) => console.warn(t),
 			onRuntimeInitialized: resolve,
