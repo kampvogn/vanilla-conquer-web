@@ -171,13 +171,19 @@ function connectNet() {
 	open();
 }
 
+// The audio context is created here, in the tap on Start, and handed to SDL
+// (Module.SDL2): Safari starts sound only from a user gesture, and SDL would
+// create its own later. A playback audio session keeps the iPhone's silent
+// switch from muting it (iOS 17+).
+let audioCtx = null;
 async function audioWorks() {
+	try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
 	try {
-		const ac = new AudioContext();
+		const ac = new (window.AudioContext || window.webkitAudioContext)();
 		await Promise.race([ac.resume(), new Promise((r) => setTimeout(r, 500))]);
-		const ok = ac.state === 'running';
+		if (ac.state === 'running') { audioCtx = ac; return true; }
 		ac.close();
-		return ok;
+		return false;
 	} catch { return false; }
 }
 
@@ -296,6 +302,7 @@ async function start() {
 		window.Module = {
 			canvas: $('canvas'),
 			noSound,
+			SDL2: audioCtx ? { audioContext: audioCtx } : undefined,
 			print: (t) => console.log(t),
 			printErr: (t) => console.warn(t),
 			onRuntimeInitialized: resolve,
